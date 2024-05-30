@@ -9,7 +9,7 @@ const fs = require('fs');
 let db = null;
 
 function activate(context) {
-	console.log('秦琼在此，诸鬼回避!');
+	console.log('*******秦琼在此，诸鬼退散!********');
 
 	initializeDatabase(context);
 
@@ -82,7 +82,59 @@ function handleJavaFileEdit(context, document) {
 		if (stderr) {
 			console.error('Bearer scan errors:', stderr);
 		}
+		updateDiagnostics(outputPath);
 		saveJsonToSqlite(outputPath);
+	});
+}
+
+const SEVERITY_MAP = {
+	critical: vscode.DiagnosticSeverity.Error,
+	high: vscode.DiagnosticSeverity.Error,
+	medium: vscode.DiagnosticSeverity.Warning,
+	low: vscode.DiagnosticSeverity.Information,
+	warning: vscode.DiagnosticSeverity.Hint
+};
+
+function updateDiagnostics(scanResult) {
+	const diagnosticCollection = vscode.languages.createDiagnosticCollection('codeIssues');
+	diagnosticCollection.clear();
+	let full_filename;
+
+	fs.readFile(scanResult, 'utf8', (err, data) => {
+		if (err) {
+			console.error('Error reading JSON file:', err);
+			return;
+		}
+		const issuesData = JSON.parse(data);
+		const diagnostics = [];
+		for (const severity in issuesData) {
+			issuesData[severity].forEach((issue) => {
+				full_filename = issue.full_filename;
+				const range = new vscode.Range(
+					new vscode.Position(issue.source.start - 1, issue.source.column.start - 1),
+					new vscode.Position(issue.source.end - 1, issue.source.column.end - 1)
+				);
+				const message = issue.title;
+				const severityLevel = SEVERITY_MAP[severity]; // Use appropriate severity level
+
+				const diagnostic = new vscode.Diagnostic(range, message, severityLevel);
+
+				diagnostic.source = 'codeIssues';
+
+				// Add any additional properties to the diagnostic
+				diagnostic.code = {
+					value: issue.id,
+					target: vscode.Uri.parse(issue.documentation_url),
+					description: issue.description,
+					code_extract: issue.code_extract
+				};
+
+				diagnostics.push(diagnostic);
+			});
+		}
+
+		const fileUri = vscode.Uri.file(full_filename);
+		diagnosticCollection.set(fileUri, diagnostics);
 	});
 }
 
