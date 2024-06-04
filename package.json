@@ -18,8 +18,18 @@
   "contributes": {
     "commands": [
       {
-        "command": "qinqiong.helloWorld",
-        "title": "Hello World"
+        "command": "qinqiong.showProblemDetail",
+        "title": "QinQiong: Show Problem Detail"
+      }
+    ]
+  },
+  "menus": {
+    "view/item/context": [
+      {
+        "command": "qinqiong.showProblemDetail",
+        "title": "QinQiong: Show Problem Detail",
+        "when": "view == problems",
+        "group": "navigation"
       }
     ]
   },
@@ -39,6 +49,7 @@
   },
   "dependencies": {
     "lodash": "^4.17.21",
+    "marked": "^12.0.2",
     "sqlite3": "^5.1.7"
   }
 }

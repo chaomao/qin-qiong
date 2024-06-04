@@ -3,7 +3,8 @@ const path = require('path');
 const cp = require('child_process');
 const lodash = require('lodash');
 const sqlite3 = require('sqlite3').verbose();
-
+const marked = require('marked');
+const { getWebviewContent } = require('./issueDetails');
 const fs = require('fs');
 
 let db = null;
@@ -23,13 +24,58 @@ function activate(context) {
 		handleJavaFileEdit(context, document);
 	}, 5000);
 
-	// Event listener for when a Ja`va file is edited
+	// Event listener for when a Java file is edited
 	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => {
 		if (event.document.languageId === 'java') {
 			handleJavaFileEditThrottled(event.document);
 		}
 	}));
+
+	let disposable = vscode.commands.registerCommand('qinqiong.showProblemDetail', (diagnostic) => {
+		const panel = vscode.window.createWebviewPanel(
+			'problemDetails',
+			'Problem Details',
+			vscode.ViewColumn.Two,
+			{ enableScripts: true }
+		);
+
+		panel.webview.html = getWebviewContent(diagnostic);
+		panel.webview.onDidReceiveMessage(
+			message => {
+				switch (message.command) {
+					case 'sendMessage':
+						// Handle chat message
+						vscode.window.showInformationMessage(`Chat message: ${message.text}`);
+						return;
+				}
+			},
+			undefined,
+			context.subscriptions
+		);
+	});
+
+	context.subscriptions.push(disposable);
+
+	// Register a Code Action Provider to provide the context menu item
+	vscode.languages.registerCodeActionsProvider('*', {
+		provideCodeActions(document, range, context, token) {
+			const codeActions = context.diagnostics.map(diagnostic => {
+				if (diagnostic.source === 'codeIssues') {
+					const action = new vscode.CodeAction('Show Problem Detail', vscode.CodeActionKind.QuickFix);
+					action.command = {
+						command: 'qinqiong.showProblemDetail',
+						title: 'Show Problem Detail',
+						arguments: [diagnostic]
+					};
+					return action;
+				}
+			});
+			return codeActions;
+		}
+	});
 }
+
+
 
 function saveCurrentTimestampToAvailabilityCheck() {
 	db.prepare('INSERT INTO availability_check (check_at) VALUES (?)')
@@ -67,7 +113,7 @@ function initializeDatabase(context) {
 }
 
 function handleJavaFileEdit(context, document) {
-	console.log('Java file', document.uri.fsPath);
+	console.log('Scan Java file', document.uri.fsPath);
 	const outputPath = path.join(context.extensionPath, `scan_results${Date.now()}.json`);
 
 	// Run the bearer scan command
@@ -95,8 +141,9 @@ const SEVERITY_MAP = {
 	warning: vscode.DiagnosticSeverity.Hint
 };
 
+const diagnosticCollection = vscode.languages.createDiagnosticCollection('codeIssues');
+
 function updateDiagnostics(scanResult) {
-	const diagnosticCollection = vscode.languages.createDiagnosticCollection('codeIssues');
 	diagnosticCollection.clear();
 	let full_filename;
 
@@ -124,8 +171,9 @@ function updateDiagnostics(scanResult) {
 				// Add any additional properties to the diagnostic
 				diagnostic.code = {
 					value: issue.id,
+					severity: severity,
 					target: vscode.Uri.parse(issue.documentation_url),
-					description: issue.description,
+					description: marked.parse(issue.description),
 					code_extract: issue.code_extract
 				};
 
@@ -158,10 +206,8 @@ function saveJsonToSqlite(jsonPath) {
 		const insertSummary = db.prepare('INSERT INTO scan_summary (scan_at, total_issue_count) VALUES (?, ?)');
 		insertSummary.run(new Date().toISOString(), formattedJsonData.length, function () {
 			const scanSummaryId = this.lastID;
-			console.log("insert summary: ", scanSummaryId);
 			const insertDetail = db.prepare('INSERT INTO scan_details (scan_summary_id, title, severity, description, code_source, code_extract, full_filename) VALUES (?, ?, ?, ?, ?, ?, ?)');
 			for (const detail of formattedJsonData) {
-				console.log("insert", detail);
 				insertDetail.run(
 					scanSummaryId,
 					detail.title,
