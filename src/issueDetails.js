@@ -18,6 +18,7 @@ function getWebviewContent(diagnostic) {
       .low {color: blue;}
       .warning{color:blue;}
       .input-box {height: 35px;}
+      .bot {color: burlywood;}
 			html {
 	box-sizing: border-box;
 	font-size: 13px;
@@ -92,37 +93,60 @@ textarea::placeholder {
   </head>
   <body>
     <div class="container">
-      <div class="issue-title">${diagnostic.message}</div>
+      <div class="issue-title" id="issue-title">${diagnostic.message}</div>
 			<h2>Code:</h2>
-      <pre class="code-block"><code>${diagnostic.code.code_extract}</code></pre>
+      <pre class="code-block" id="code-block"><code>${diagnostic.code.code_extract}</code></pre>
       <div class="issue-description">
         <h2 style="text-transform: uppercase" class="${diagnostic.code.severity}">Severity: ${diagnostic.code.severity}</h2>
-        <div>${diagnostic.code.description}</div>
+        <div id="issue-description">${diagnostic.code.description}</div>
       </div>
       <div class="chat-window" id="chatWindow">
         <!-- Chat messages will appear here -->
       </div>
 			<div style="display:flex">
       <input type="text" class="input-box" id="chatInput" placeholder="Type a message..." style="flex:4">
-      <button style="flex:1"onclick="sendMessage()">Send</button>
+      <button style="flex:1" onclick="sendMessage()">Send</button>
 			</div>
     </div>
     <script>
       const vscode = acquireVsCodeApi();
+      let firstRun = true;
       function sendMessage() {
         const inputBox = document.getElementById('chatInput');
         const message = inputBox.value;
         if (message) {
-          vscode.postMessage({ command: 'sendMessage', text: message });
+          if (firstRun) {
+            debugger
+            content = "code issue is: " + document.getElementById('issue-title').textContent;
+            content += "description is: " + document.getElementById('issue-description').textContent;
+            content += "source code is: " + document.getElementById('code-block').textContent;
+            content += "my input is: " + message;
+            firstRun = false;
+          } else {
+            content = message;
+          }
+          vscode.postMessage({ command: 'sendMessage', text: content });
+          chatWindow.innerHTML += '<div class="chat-message">Me: ' + message + '</div>';
+          chatWindow.innerHTML += '<div class="chat-message last">AI: ... </div>';
           inputBox.value = '';
-          const chatWindow = document.getElementById('chatWindow');
-          chatWindow.innerHTML += '<div class="chat-message">' + message + '</div>';
-          chatWindow.scrollTop = chatWindow.scrollHeight;
         }
       }
+
+      window.addEventListener('message', event => {
+        const message = event.data;
+        switch (message.command) {
+          case 'aiResponse':
+            document.querySelector('.chat-message.last').remove()
+            const chatWindow = document.getElementById('chatWindow');
+            content = message.text.replace(/\\n/g, '<br>');
+            chatWindow.innerHTML += '<div class="chat-message bot">AI: ' + content + '</div>';
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            break;
+        }
+      });
     </script>
   </body>
   </html>`;
 };
 
-module.exports = { getWebviewContent };
+module.exports = getWebviewContent;

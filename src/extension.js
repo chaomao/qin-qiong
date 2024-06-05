@@ -4,7 +4,8 @@ const cp = require('child_process');
 const lodash = require('lodash');
 const sqlite3 = require('sqlite3').verbose();
 const marked = require('marked');
-const { getWebviewContent } = require('./issueDetails');
+const getWebviewContent = require('./issueDetails');
+const axios = require('axios');
 const fs = require('fs');
 
 let db = null;
@@ -22,7 +23,7 @@ function activate(context) {
 
 	const handleJavaFileEditThrottled = lodash.debounce((document) => {
 		handleJavaFileEdit(context, document);
-	}, 5000);
+	}, 3000);
 
 	// Event listener for when a Java file is edited
 	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => {
@@ -41,11 +42,16 @@ function activate(context) {
 
 		panel.webview.html = getWebviewContent(diagnostic);
 		panel.webview.onDidReceiveMessage(
-			message => {
+			async (message) => {
 				switch (message.command) {
 					case 'sendMessage':
-						// Handle chat message
-						vscode.window.showInformationMessage(`Chat message: ${message.text}`);
+						const userMessage = message.text;
+						try {
+							const aiResponse = await getAIResponse(userMessage);
+							panel.webview.postMessage({ command: 'aiResponse', text: aiResponse });
+						} catch (error) {
+							vscode.window.showErrorMessage(`Error communicating with AI: ${error.message}`);
+						}
 						return;
 				}
 			},
@@ -75,6 +81,35 @@ function activate(context) {
 	});
 }
 
+
+
+const messagesPool = [
+	{ role: 'system', content: 'you are a software engineer expert focus on analyze and fix coding issues' }
+];
+
+async function getAIResponse(userMessage) {
+	const apiKey = 'openai-api-key';
+	// const chat-glm-apiKey = 'chatglm-key';
+	const userInput = { role: 'user', content: userMessage };
+	const response = await axios.post(
+		'https://api.openai.com/v1/chat/completions',
+		// 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+		{
+			model: 'gpt-3.5-turbo', // Use the appropriate model
+			// model: 'glm-3-turbo', // Use the appropriate model
+			messages: [...messagesPool, userInput],
+		},
+		{
+			headers: {
+				'Authorization': `Bearer ${apiKey}`,
+				'Content-Type': 'application/json',
+			},
+		}
+	);
+	const assistantResponse = response.data.choices[0].message;
+	messagesPool.push(userInput, assistantResponse)
+	return marked.parse(assistantResponse.content);
+}
 
 
 function saveCurrentTimestampToAvailabilityCheck() {
