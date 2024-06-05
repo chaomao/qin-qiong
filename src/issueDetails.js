@@ -127,7 +127,7 @@ textarea::placeholder {
           }
           vscode.postMessage({ command: 'sendMessage', text: content });
           chatWindow.innerHTML += '<div class="chat-message">Me: ' + message + '</div>';
-          chatWindow.innerHTML += '<div class="chat-message last">AI: ... </div>';
+          chatWindow.innerHTML += '<div class="chat-message bot last">AI: ... </div>';
           inputBox.value = '';
         }
       }

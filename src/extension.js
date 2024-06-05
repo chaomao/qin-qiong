@@ -9,10 +9,18 @@ const axios = require('axios');
 const fs = require('fs');
 
 let db = null;
-
+let statusBarItem = null;
 function activate(context) {
 	console.log('*******秦琼在此，诸鬼退散!********');
 
+	// Create a status bar item
+	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	statusBarItem.text = '秦琼: 安全';
+	statusBarItem.backgroundColor = undefined;
+	statusBarItem.show();
+
+	// Register the status bar item in the context
+	context.subscriptions.push(statusBarItem);
 	initializeDatabase(context);
 
 	const intervalId = setInterval(() => {
@@ -107,7 +115,7 @@ async function getAIResponse(userMessage) {
 		}
 	);
 	const assistantResponse = response.data.choices[0].message;
-	messagesPool.push(userInput, assistantResponse)
+	messagesPool.push(userInput, assistantResponse);
 	return marked.parse(assistantResponse.content);
 }
 
@@ -149,6 +157,8 @@ function initializeDatabase(context) {
 
 function handleJavaFileEdit(context, document) {
 	console.log('Scan Java file', document.uri.fsPath);
+	statusBarItem.text = "秦琼: 扫描中";
+	statusBarItem.backgroundColor = undefined;
 	const outputPath = path.join(context.extensionPath, `scan_results${Date.now()}.json`);
 
 	// Run the bearer scan command
@@ -216,6 +226,12 @@ function updateDiagnostics(scanResult) {
 			});
 		}
 
+		if (diagnostics.length > 0) {
+			statusBarItem.text = `秦琼: ${diagnostics.length} 问题`;
+			statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+		} else {
+			statusBarItem.text = `秦琼: 安全`;
+		}
 		const fileUri = vscode.Uri.file(full_filename);
 		diagnosticCollection.set(fileUri, diagnostics);
 	});
@@ -261,6 +277,7 @@ function saveJsonToSqlite(jsonPath) {
 // This method is called when your extension is deactivated
 function deactivate() {
 	if (db) db.close();
+	if (statusBarItem) statusBarItem = null;
 }
 
 module.exports = {
