@@ -116,7 +116,6 @@ textarea::placeholder {
         const message = inputBox.value;
         if (message) {
           if (firstRun) {
-            debugger
             content = "code issue is: " + document.getElementById('issue-title').textContent;
             content += "description is: " + document.getElementById('issue-description').textContent;
             content += "source code is: " + document.getElementById('code-block').textContent;
